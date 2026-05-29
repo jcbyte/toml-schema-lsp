@@ -29,7 +29,10 @@ impl LanguageServer for Backend {
 
     async fn initialized(&self, _: InitializedParams) {
         self.client
-            .log_message(MessageType::INFO, "TOML Validator Server Initialized!")
+            .log_message(
+                MessageType::INFO,
+                "TOML Schema Language Server Initialised!",
+            )
             .await;
     }
 
@@ -37,52 +40,60 @@ impl LanguageServer for Backend {
         Ok(())
     }
 
-    // Triggers every time the user opens or edits a TOML file
+    // Triggers every time the user edits a TOML file
     async fn did_change(&self, params: DidChangeTextDocumentParams) {
         let uri = params.text_document.uri;
         let text = &params.content_changes[0].text;
 
-        // Parse the TOML text from memory
-        let parsed_doc = match toml::from_str::<toml::Table>(text) {
-            Ok(doc) => doc,
+        let Ok(document) = toml::from_str::<Table>(text) else {
+            // If the TOML cannot be parsed, then ignore (this is not a TOML syntax extension)
+            return;
+        };
+
+        // Retrieve the specified schema location
+        let Some(schema_loc) = document
+            .get("toml-schema")
+            .and_then(Value::as_table)
+            .and_then(|metadata| metadata.get("location"))
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|location| !location.is_empty())
+        else {
+            // If `toml-schema.location` is not specified, then ignore.
+            // The user is not using a toml schema on this file
+            return;
+        };
+
+        // Load the specified toml schema
+        // todo remove dangerously unwrapping
+        let doc_dir = uri.to_file_path().unwrap().parent().unwrap().to_path_buf();
+        let schema_path = doc_dir.join(schema_loc);
+        let schema = match Schema::load(&schema_path) {
+            Ok(s) => s,
             Err(e) => {
-                self.client
-                    .log_message(MessageType::ERROR, format!("TOML Parse Error: {}", e))
-                    .await;
+                // todo show this warning on the toml-schema.location
                 return;
             }
         };
 
-        // If schema is available, validate the document
-        if let Some(schema) = self.schema.as_ref() {
-            let result = schema.validate(&parsed_doc);
+        // Validate against the schema, and generate diagnostics
+        let result = schema.validate(&document);
+        let diagnostics = result
+            .errors
+            .iter()
+            .map(|error| {
+                // todo work out locations
+                Diagnostic::new_simple(
+                    Range::new(Position::new(0, 0), Position::new(0, 10)),
+                    format!("{}:{}", error.path, error.message),
+                )
+            })
+            .collect::<Vec<_>>();
 
-            // Map validation errors to LSP Diagnostics
-            let diagnostics: Vec<Diagnostic> = result
-                .errors
-                .iter()
-                .map(|error| {
-                    // Parse the JSONPath-like error.path to estimate line/column
-                    // For now, report all errors at line 0
-                    Diagnostic {
-                        range: Range::new(Position::new(0, 0), Position::new(0, 10)),
-                        severity: Some(DiagnosticSeverity::ERROR),
-                        code: None,
-                        code_description: None,
-                        source: Some("TOML Schema".to_string()),
-                        message: format!("{}: {}", error.path, error.message),
-                        related_information: None,
-                        tags: None,
-                        data: None,
-                    }
-                })
-                .collect();
-
-            // Push diagnostics back to VS Code
-            self.client
-                .publish_diagnostics(uri, diagnostics, None)
-                .await;
-        }
+        // Push the diagnostics back to the client
+        self.client
+            .publish_diagnostics(uri, diagnostics, None)
+            .await;
     }
 }
 
