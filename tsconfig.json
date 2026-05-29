@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "module": "commonjs",
+    "target": "ES2022",
+    "outDir": "client/out",
+    "lib": [
+      "ES2022"
+    ],
+    "sourceMap": true,
+    "rootDir": "client/src",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "client/src/**/*"
+  ]
+}

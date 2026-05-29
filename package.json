@@ -1,0 +1,24 @@
+{
+	"name": "toml-schema-validator",
+	"displayName": "TOML Schema Validator",
+	"version": "0.1.0",
+	"scripts": {
+		"dev": "tsc --watch",
+		"build": "tsc"
+	},
+	"main": "./client/out/extension.js",
+	"engines": {
+		"vscode": "^1.85.0"
+	},
+	"activationEvents": [
+		"onLanguage:toml"
+	],
+	"dependencies": {
+		"vscode-languageclient": "^9.0.1"
+	},
+	"devDependencies": {
+		"@types/node": "^25.9.1",
+		"@types/vscode": "^1.120.0",
+		"typescript": "^6.0.3"
+	}
+}
