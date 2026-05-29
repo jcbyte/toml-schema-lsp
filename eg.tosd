@@ -1,0 +1,19 @@
+[toml-schema]
+version = "1.0.0"
+
+[elements.name]
+typeof = "string"
+
+[elements.flags]
+type = "array"
+itemtype = "boolean"
+
+[elements.tuple]
+type = "array"
+items = [ "string", "integer" ]
+
+[elements.identity]
+oneof = [ "string", "integer" ]
+
+[elements.flex]
+anyof = [ "string", "integer" ]
