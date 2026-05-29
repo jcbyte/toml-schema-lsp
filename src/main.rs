@@ -1,13 +1,15 @@
+use tokio::net::TcpListener;
+use toml::{Table, Value};
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
-use std::sync::Arc;
 use toml_schema::schema::Schema;
+
+// todo should the schema be stored in a cache? What if it changes?
 
 struct Backend {
     client: Client,
-    schema: Arc<Option<Schema>>,
 }
 
 #[tower_lsp::async_trait]
@@ -86,16 +88,18 @@ impl LanguageServer for Backend {
 
 #[tokio::main]
 async fn main() {
-    // Load schema once at startup (you may want to load from a specific path or URI)
-    // For now, we'll leave it uninitialized - you can set this based on your LSP configuration
-    let schema = Arc::new(Schema::load("eg.tosd").ok()); // Try to load schema, but don't fail if missing
+    let (service, socket) = LspService::new(|client| Backend { client });
 
-    let stdin = tokio::io::stdin();
-    let stdout = tokio::io::stdout();
-
-    let (service, socket) = LspService::new(|client| Backend {
-        client,
-        schema: schema.clone(),
-    });
-    Server::new(stdin, stdout, socket).serve(service).await;
+    if cfg!(debug_assertions) {
+        // In development, run the LSP completely separately with TCP
+        let listener = TcpListener::bind(("localhost", 9260)).await.unwrap();
+        let (stream, _) = listener.accept().await.unwrap();
+        let (read, write) = tokio::io::split(stream);
+        Server::new(read, write, socket).serve(service).await;
+    } else {
+        // In production, the server communicates with stdin/stdout
+        let stdin = tokio::io::stdin();
+        let stdout = tokio::io::stdout();
+        Server::new(stdin, stdout, socket).serve(service).await;
+    }
 }

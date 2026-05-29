@@ -1,19 +1,34 @@
+import net from "net";
 import path from "path";
-import { ExtensionContext, workspace } from "vscode";
+import { ExtensionContext, ExtensionMode, workspace } from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 
 let client: LanguageClient;
 
 export function activate(context: ExtensionContext) {
-	// Path to your compiled Rust binary
-	// ! In production, we need to bundle this
-	const serverExecutable = context.asAbsolutePath(path.join("target", "debug", "toml_schema_extension_server.exe"));
-	console.log("exec", serverExecutable);
+	let serverOptions: ServerOptions;
 
-	const serverOptions: ServerOptions = {
-		run: { command: serverExecutable },
-		debug: { command: serverExecutable },
-	};
+	if (context.extensionMode == ExtensionMode.Development) {
+		// In development, connect to a running LSP rather than starting one up
+		serverOptions = () => {
+			return new Promise((resolve) => {
+				const client = net.connect({ port: 9260 }, () => {
+					resolve({
+						reader: client,
+						writer: client,
+					});
+				});
+			});
+		};
+	} else {
+		// In production, startup the server binary and communicate with stdin/stdout
+		// todo bundle this
+		const serverExecutable = context.asAbsolutePath(path.join("target", "debug", "toml_schema_extension_server.exe"));
+		serverOptions = {
+			run: { command: serverExecutable },
+			debug: { command: serverExecutable },
+		};
+	}
 
 	const clientOptions: LanguageClientOptions = {
 		// Register the server for TOML files
@@ -24,8 +39,7 @@ export function activate(context: ExtensionContext) {
 	};
 
 	client = new LanguageClient("tomlSchemaLsp", "TOML Schema Language Server", serverOptions, clientOptions);
-
-	// Starting the client also starts the Rust binary
+	// Starting the client will also start the Rust binary (in prod)
 	client.start();
 }
 
