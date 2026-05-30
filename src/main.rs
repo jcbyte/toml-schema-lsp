@@ -1,10 +1,13 @@
 use tokio::net::TcpListener;
 use toml::{Table, Value};
+use toml_edit::Item;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
 
 use toml_schema::schema::Schema;
+
+mod util;
 
 // todo should the schema be stored in a cache? What if it changes?
 
@@ -45,7 +48,7 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = &params.content_changes[0].text;
 
-        let Ok(document) = toml::from_str::<Table>(text) else {
+        let Ok(document) = toml_edit::Document::parse(text) else {
             // If the TOML cannot be parsed, then ignore (this is not a TOML syntax extension)
             return;
         };
@@ -53,9 +56,9 @@ impl LanguageServer for Backend {
         // Retrieve the specified schema location
         let Some(schema_loc) = document
             .get("toml-schema")
-            .and_then(Value::as_table)
+            .and_then(Item::as_table)
             .and_then(|metadata| metadata.get("location"))
-            .and_then(Value::as_str)
+            .and_then(Item::as_str)
             .map(str::trim)
             .filter(|location| !location.is_empty())
         else {
@@ -64,6 +67,8 @@ impl LanguageServer for Backend {
             return;
         };
 
+        let lindex = line_index::LineIndex::new(text);
+
         // Load the specified toml schema
         // todo remove dangerously unwrapping
         let doc_dir = uri.to_file_path().unwrap().parent().unwrap().to_path_buf();
@@ -71,29 +76,52 @@ impl LanguageServer for Backend {
         let schema = match Schema::load(&schema_path) {
             Ok(s) => s,
             Err(e) => {
-                // todo show this warning on the toml-schema.location
+                // Show an error that the specified toml schema cannot be loaded
+
+                let schema_span = util::get_toml_span(document, "toml-schema.location")
+                    .expect("A schema was loaded, but its span cannot be found");
+                let range = util::get_file_range(
+                    &lindex,
+                    (schema_span.start as u32)..(schema_span.end as u32),
+                );
+
+                self.client
+                    .publish_diagnostics(
+                        uri,
+                        vec![Diagnostic::new_simple(
+                            range,
+                            format!("TOML Schema cannot be loaded: {e}"),
+                        )],
+                        None,
+                    )
+                    .await;
+
+                // Do not continue, as we do not know the schema to validate against
                 return;
             }
         };
 
         // Validate against the schema, and generate diagnostics
-        let result = schema.validate(&document);
-        let diagnostics = result
-            .errors
-            .iter()
-            .map(|error| {
-                // todo work out locations
-                Diagnostic::new_simple(
-                    Range::new(Position::new(0, 0), Position::new(0, 10)),
-                    format!("{}:{}", error.path, error.message),
-                )
-            })
-            .collect::<Vec<_>>();
+        // todo
 
-        // Push the diagnostics back to the client
-        self.client
-            .publish_diagnostics(uri, diagnostics, None)
-            .await;
+        // // todo need to get the toml_edit document in toml format
+        // let result = schema.validate(&document);
+        // let diagnostics = result
+        //     .errors
+        //     .iter()
+        //     .map(|error| {
+        //         // todo work out locations
+        //         Diagnostic::new_simple(
+        //             Range::new(Position::new(0, 0), Position::new(0, 10)),
+        //             format!("{}:{}", error.path, error.message),
+        //         )
+        //     })
+        //     .collect::<Vec<_>>();
+
+        // // Push the diagnostics back to the client
+        // self.client
+        //     .publish_diagnostics(uri, diagnostics, None)
+        //     .await;
     }
 }
 
