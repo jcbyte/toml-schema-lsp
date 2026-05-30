@@ -3,7 +3,7 @@ use std::ops::Range;
 use line_index::LineIndex;
 use tower_lsp::lsp_types::{self, Position};
 
-pub fn get_toml_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Option<Range<usize>> {
+pub fn get_closest_item_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Range<usize> {
     let trimmed_key = key.strip_prefix("$.").unwrap_or(key);
     let components = trimmed_key.split(".");
 
@@ -11,11 +11,12 @@ pub fn get_toml_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Option<Ran
     for component in components {
         match item.get(component) {
             Some(next) => item = next,
-            None => return None,
+            None => break,
         };
     }
 
     item.span()
+        .expect("Every item in `ImDocument` should have a span")
 }
 
 pub fn get_file_range(index: &LineIndex, range: Range<u32>) -> lsp_types::Range {

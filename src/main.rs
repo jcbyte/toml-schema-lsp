@@ -10,6 +10,7 @@ use toml_schema::schema::Schema;
 mod util;
 
 // todo should the schema be stored in a cache? What if it changes?
+// todo this should also be on opening file
 
 struct Backend {
     client: Client,
@@ -83,8 +84,7 @@ impl LanguageServer for Backend {
 
             let doc_edit = toml_edit::ImDocument::parse(text)
                 .expect("TOML was correctly deserialised earlier");
-            let schema_span = util::get_toml_span(&doc_edit, "toml-schema.location")
-                .expect("A schema was loaded, but its span cannot be found");
+            let schema_span = util::get_closest_item_span(&doc_edit, "toml-schema.location");
             let range = util::get_file_range(
                 &text_index,
                 (schema_span.start as u32)..(schema_span.end as u32),
@@ -117,8 +117,7 @@ impl LanguageServer for Backend {
 
                 let doc_edit = toml_edit::ImDocument::parse(text)
                     .expect("TOML was correctly deserialised earlier");
-                let schema_span = util::get_toml_span(&doc_edit, "toml-schema.location")
-                    .expect("A schema was loaded, but its span cannot be found");
+                let schema_span = util::get_closest_item_span(&doc_edit, "toml-schema.location");
                 let range = util::get_file_range(
                     &text_index,
                     (schema_span.start as u32)..(schema_span.end as u32),
@@ -159,11 +158,19 @@ impl LanguageServer for Backend {
             .errors
             .iter()
             .map(|error| {
-                // todo where do i place errors if they are not found
-                let span = util::get_toml_span(&doc_edit, &error.path).unwrap_or(0..10);
+                // This function will return the closest item to the element, when inner keys are incorrect (span is correct)
+                let span = util::get_closest_item_span(&doc_edit, &error.path);
                 let range =
                     util::get_file_range(&text_index, (span.start as u32)..(span.end as u32));
-                Diagnostic::new_simple(range, format!("{}: {}", error.message, error.path))
+                Diagnostic::new(
+                    range,
+                    Some(DiagnosticSeverity::ERROR),
+                    None,
+                    None,
+                    format!("{}: {}", error.message, error.path),
+                    None,
+                    None,
+                )
             })
             .collect::<Vec<_>>();
 
