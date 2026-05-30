@@ -2,6 +2,8 @@
 	"name": "toml-schema-validator",
 	"displayName": "TOML Schema Validator",
 	"version": "0.1.0",
+	"publisher": "jcbyte",
+	"icon": "icon.png",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/jcbyte/toml-schema-lsp"

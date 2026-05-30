@@ -1,0 +1,8 @@
+<svg viewBox="0 0 120 120" width="120" height="120"
+  xmlns="http://www.w3.org/2000/svg">
+  <rect width="100%" height="100%" fill="#3d3b3a"/>
+  <polygon points="18.29 9.14 37.71 9.14 37.71 17.14 28.57 17.14 28.57 74.29 37.71 74.29 37.71 82.29 18.29 82.29" fill="#9c4221"/>
+  <polygon points="42.29 24 77.71 24 77.71 33.14 64 33.14 64 72 56 72 56 33.14 42.29 33.14" fill="#dedede"/>
+  <polygon points="82.29 9.14 101.71 9.14 101.71 82.29 82.29 82.29 82.29 74.29 91.43 74.29 91.43 17.14 82.29 17.14" fill="#9c4221"/>
+  <text x="60" y="110" fill="#919191" font-size="24px" font-weight="700" font-family="'Segoe UI', Aptos, Calibri, -apple-system, BlinkMacSystemFont, sans-serif" text-anchor="middle">Schema</text>
+</svg>
