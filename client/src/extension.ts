@@ -23,11 +23,12 @@ export function activate(context: ExtensionContext) {
 		};
 	} else {
 		// In production, startup the server binary and communicate with stdin/stdout
-		// todo bundle this
-		const serverExecutable = context.asAbsolutePath(path.join("target", "debug", "toml_schema_extension_server.exe"));
+		const isWindows = process.platform === "win32";
+		const binName = isWindows ? "toml_schema_extension_server.exe" : "toml_schema_extension_server";
+		const binPath = context.asAbsolutePath(path.join("server", binName));
 		serverOptions = {
-			run: { command: serverExecutable },
-			debug: { command: serverExecutable },
+			run: { command: binPath },
+			debug: { command: binPath },
 		};
 	}
 
