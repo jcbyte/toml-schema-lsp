@@ -22,7 +22,7 @@
 	"scripts": {
 		"dev": "esbuild client/src/extension.ts --bundle --outfile=client/out/extension.js --external:vscode --format=cjs --platform=node --watch --sourcemap",
 		"build": "esbuild client/src/extension.ts --bundle --outfile=client/out/extension.js --external:vscode --format=cjs --platform=node --minify",
-		"package": "npm run build & ts-node ./scripts/build-server.ts",
+		"package": "npm run build && ts-node ./scripts/build-server.ts",
 		"vscode:prepublish": "npm run package"
 	},
 	"dependencies": {
