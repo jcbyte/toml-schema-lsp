@@ -45,7 +45,7 @@ Open this project in VS Code, press `F5` and select **"VS Code Extension Develop
 To package the VS Code extension into a `.vsix` bundle:
 
 ```bash
-vsce package
+npx @vscode/vsce package
 ```
 
 ## Licence
