@@ -5,7 +5,7 @@ mod backend;
 
 #[tokio::main]
 async fn main() {
-    let (service, socket) = LspService::new(|client| backend::Backend::new(client));
+    let (service, socket) = LspService::new(backend::Backend::new);
 
     if cfg!(debug_assertions) {
         // In development, run the LSP completely separately with TCP

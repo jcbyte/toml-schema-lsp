@@ -1,5 +1,5 @@
 /target
+/server
 
 /node_modules/
-package-lock.json
 /client/out/

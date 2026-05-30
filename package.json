@@ -2,23 +2,35 @@
 	"name": "toml-schema-validator",
 	"displayName": "TOML Schema Validator",
 	"version": "0.1.0",
-	"scripts": {
-		"dev": "tsc --watch",
-		"build": "tsc"
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/jcbyte/toml-schema-lsp"
 	},
-	"main": "./client/out/extension.js",
 	"engines": {
-		"vscode": "^1.85.0"
+		"vscode": "^1.120.0"
 	},
+	"categories": [
+		"Linters",
+		"Programming Languages"
+	],
 	"activationEvents": [
 		"onLanguage:toml"
 	],
+	"main": "./client/out/extension.js",
+	"scripts": {
+		"dev": "esbuild client/src/extension.ts --bundle --outfile=client/out/extension.js --external:vscode --format=cjs --platform=node --watch --sourcemap",
+		"build": "esbuild client/src/extension.ts --bundle --outfile=client/out/extension.js --external:vscode --format=cjs --platform=node --minify",
+		"package": "npm run build & ts-node ./scripts/build-server.ts",
+		"vscode:prepublish": "npm run package"
+	},
 	"dependencies": {
 		"vscode-languageclient": "^9.0.1"
 	},
 	"devDependencies": {
 		"@types/node": "^25.9.1",
 		"@types/vscode": "^1.120.0",
+		"esbuild": "^0.28.0",
+		"ts-node": "^10.9.2",
 		"typescript": "^6.0.3"
 	}
 }

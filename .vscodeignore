@@ -1,0 +1,11 @@
+.vscode/**
+.git/**
+.gitignore
+client/src/**
+client/out/**/*.map
+src/**
+target/**
+Cargo.*
+tsconfig.json
+node_modules/**
+scripts/**
