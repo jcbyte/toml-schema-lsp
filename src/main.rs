@@ -1,9 +1,6 @@
-use std::path::{Path, PathBuf};
-
 use line_index::LineIndex;
 use tokio::net::TcpListener;
 use toml::{Table, Value};
-use toml_edit::Item;
 use tower_lsp::jsonrpc::Result;
 use tower_lsp::lsp_types::*;
 use tower_lsp::{Client, LanguageServer, LspService, Server};
@@ -51,17 +48,19 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = &params.content_changes[0].text;
 
-        let Ok(document) = toml_edit::Document::parse(text) else {
+        // Deserialise the TOML now, to use it for extracting schema and validating
+        // Only create a `toml_edit` document later, when we need span locations
+        let Ok(doc) = toml::from_str::<Table>(text) else {
             // If the TOML cannot be parsed, then ignore (this is not a TOML syntax extension)
             return;
         };
 
         // Retrieve the specified schema location
-        let Some(schema_loc) = document
+        let Some(schema_loc) = doc
             .get("toml-schema")
-            .and_then(Item::as_table)
+            .and_then(Value::as_table)
             .and_then(|metadata| metadata.get("location"))
-            .and_then(Item::as_str)
+            .and_then(Value::as_str)
             .map(str::trim)
             .filter(|location| !location.is_empty())
         else {
@@ -70,7 +69,7 @@ impl LanguageServer for Backend {
             return;
         };
 
-        let lindex = LineIndex::new(text);
+        let text_index = LineIndex::new(text);
 
         // Load the specified toml schema
         let Some(schema_path) = uri
@@ -82,10 +81,12 @@ impl LanguageServer for Backend {
             // If the schema path cannot be resolved, potentially user is in scratchpad
             // Show a warning and do not continue
 
-            let schema_span = util::get_toml_span(&document, "toml-schema.location")
+            let doc_edit = toml_edit::ImDocument::parse(text)
+                .expect("TOML was correctly deserialised earlier");
+            let schema_span = util::get_toml_span(&doc_edit, "toml-schema.location")
                 .expect("A schema was loaded, but its span cannot be found");
             let range = util::get_file_range(
-                &lindex,
+                &text_index,
                 (schema_span.start as u32)..(schema_span.end as u32),
             );
 
@@ -114,10 +115,12 @@ impl LanguageServer for Backend {
                 // If the specified toml schema cannot be loaded
                 // Show a warning, and do not continue, as we do not know the schema to validate against
 
-                let schema_span = util::get_toml_span(&document, "toml-schema.location")
+                let doc_edit = toml_edit::ImDocument::parse(text)
+                    .expect("TOML was correctly deserialised earlier");
+                let schema_span = util::get_toml_span(&doc_edit, "toml-schema.location")
                     .expect("A schema was loaded, but its span cannot be found");
                 let range = util::get_file_range(
-                    &lindex,
+                    &text_index,
                     (schema_span.start as u32)..(schema_span.end as u32),
                 );
 
@@ -142,16 +145,24 @@ impl LanguageServer for Backend {
         };
 
         // Validate against the schema, and generate diagnostics
-        // todo can the toml_edit document be converted to toml format instead, does this even matter?
-        let toml_doc = toml::from_str::<Table>(text).unwrap();
-        let result = schema.validate(&toml_doc);
+        let result = schema.validate(&doc);
+        if result.valid() {
+            // If the results are valid then publish no diagnostics, to clear any previous
+            self.client.publish_diagnostics(uri, vec![], None).await;
+            return;
+        }
+
+        let doc_edit =
+            toml_edit::ImDocument::parse(text).expect("TOML was correctly deserialised earlier");
+
         let diagnostics = result
             .errors
             .iter()
             .map(|error| {
                 // todo where do i place errors if they are not found
-                let span = util::get_toml_span(&document, &error.path).unwrap_or(0..10);
-                let range = util::get_file_range(&lindex, (span.start as u32)..(span.end as u32));
+                let span = util::get_toml_span(&doc_edit, &error.path).unwrap_or(0..10);
+                let range =
+                    util::get_file_range(&text_index, (span.start as u32)..(span.end as u32));
                 Diagnostic::new_simple(range, format!("{}: {}", error.message, error.path))
             })
             .collect::<Vec<_>>();

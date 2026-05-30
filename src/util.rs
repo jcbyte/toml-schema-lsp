@@ -3,7 +3,7 @@ use std::ops::Range;
 use line_index::LineIndex;
 use tower_lsp::lsp_types::{self, Position};
 
-pub fn get_toml_span<T>(doc: &toml_edit::Document<T>, key: &str) -> Option<Range<usize>> {
+pub fn get_toml_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Option<Range<usize>> {
     let trimmed_key = key.strip_prefix("$.").unwrap_or(key);
     let components = trimmed_key.split(".");
 
