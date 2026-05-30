@@ -12,6 +12,7 @@ export function activate(context: ExtensionContext) {
 		// In development, connect to a running LSP rather than starting one up
 		serverOptions = () => {
 			return new Promise((resolve) => {
+				// Use magic port number 9260, this is synced in `main.rs`
 				const client = net.connect({ port: 9260 }, () => {
 					resolve({
 						reader: client,

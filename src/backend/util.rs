@@ -5,7 +5,7 @@ use tower_lsp::lsp_types::{self, Position};
 
 /// Find the closest element to the key formatted as `$.outer.inner.value`.
 /// Returns the location within the original document for that element.
-pub fn get_closest_item_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Range<usize> {
+pub fn get_closest_item_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Range<u32> {
     // Remove the "$" (main) component if it is added.
     let trimmed_key = key.strip_prefix("$.").unwrap_or(key);
     let components = trimmed_key.split(".");
@@ -21,6 +21,7 @@ pub fn get_closest_item_span<S>(doc: &toml_edit::ImDocument<S>, key: &str) -> Ra
     }
 
     item.span()
+        .map(|s| (s.start as u32)..(s.end as u32))
         .expect("Every item in `ImDocument` should have a span")
 }
 
