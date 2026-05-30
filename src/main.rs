@@ -78,7 +78,7 @@ impl LanguageServer for Backend {
             Err(e) => {
                 // Show an error that the specified toml schema cannot be loaded
 
-                let schema_span = util::get_toml_span(document, "toml-schema.location")
+                let schema_span = util::get_toml_span(&document, "toml-schema.location")
                     .expect("A schema was loaded, but its span cannot be found");
                 let range = util::get_file_range(
                     &lindex,
@@ -102,26 +102,24 @@ impl LanguageServer for Backend {
         };
 
         // Validate against the schema, and generate diagnostics
-        // todo
+        // todo can the toml_edit document be converted to toml format instead, does this even matter?
+        let toml_doc = toml::from_str::<Table>(text).unwrap();
+        let result = schema.validate(&toml_doc);
+        let diagnostics = result
+            .errors
+            .iter()
+            .map(|error| {
+                // todo where do i place errors if they are not found
+                let span = util::get_toml_span(&document, &error.path).unwrap_or(0..10);
+                let range = util::get_file_range(&lindex, (span.start as u32)..(span.end as u32));
+                Diagnostic::new_simple(range, format!("{}: {}", error.message, error.path))
+            })
+            .collect::<Vec<_>>();
 
-        // // todo need to get the toml_edit document in toml format
-        // let result = schema.validate(&document);
-        // let diagnostics = result
-        //     .errors
-        //     .iter()
-        //     .map(|error| {
-        //         // todo work out locations
-        //         Diagnostic::new_simple(
-        //             Range::new(Position::new(0, 0), Position::new(0, 10)),
-        //             format!("{}:{}", error.path, error.message),
-        //         )
-        //     })
-        //     .collect::<Vec<_>>();
-
-        // // Push the diagnostics back to the client
-        // self.client
-        //     .publish_diagnostics(uri, diagnostics, None)
-        //     .await;
+        // Push the diagnostics back to the client
+        self.client
+            .publish_diagnostics(uri, diagnostics, None)
+            .await;
     }
 }
 
