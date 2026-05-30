@@ -1,3 +1,6 @@
+use std::path::{Path, PathBuf};
+
+use line_index::LineIndex;
 use tokio::net::TcpListener;
 use toml::{Table, Value};
 use toml_edit::Item;
@@ -62,21 +65,54 @@ impl LanguageServer for Backend {
             .map(str::trim)
             .filter(|location| !location.is_empty())
         else {
-            // If `toml-schema.location` is not specified, then ignore.
+            // If `toml-schema.location` is not specified, then ignore
             // The user is not using a toml schema on this file
             return;
         };
 
-        let lindex = line_index::LineIndex::new(text);
+        let lindex = LineIndex::new(text);
 
         // Load the specified toml schema
-        // todo remove dangerously unwrapping
-        let doc_dir = uri.to_file_path().unwrap().parent().unwrap().to_path_buf();
-        let schema_path = doc_dir.join(schema_loc);
+        let Some(schema_path) = uri
+            .to_file_path()
+            .ok()
+            .and_then(|fp| fp.parent()?.to_owned().into())
+            .map(|dp| dp.join(schema_loc))
+        else {
+            // If the schema path cannot be resolved, potentially user is in scratchpad
+            // Show a warning and do not continue
+
+            let schema_span = util::get_toml_span(&document, "toml-schema.location")
+                .expect("A schema was loaded, but its span cannot be found");
+            let range = util::get_file_range(
+                &lindex,
+                (schema_span.start as u32)..(schema_span.end as u32),
+            );
+
+            self.client
+                .publish_diagnostics(
+                    uri,
+                    vec![Diagnostic::new(
+                        range,
+                        Some(DiagnosticSeverity::WARNING),
+                        None,
+                        None,
+                        format!("TOML Schema location cannot be resolved"),
+                        None,
+                        None,
+                    )],
+                    None,
+                )
+                .await;
+
+            return;
+        };
+
         let schema = match Schema::load(&schema_path) {
             Ok(s) => s,
             Err(e) => {
-                // Show an error that the specified toml schema cannot be loaded
+                // If the specified toml schema cannot be loaded
+                // Show a warning, and do not continue, as we do not know the schema to validate against
 
                 let schema_span = util::get_toml_span(&document, "toml-schema.location")
                     .expect("A schema was loaded, but its span cannot be found");
@@ -88,15 +124,19 @@ impl LanguageServer for Backend {
                 self.client
                     .publish_diagnostics(
                         uri,
-                        vec![Diagnostic::new_simple(
+                        vec![Diagnostic::new(
                             range,
+                            Some(DiagnosticSeverity::WARNING),
+                            None,
+                            None,
                             format!("TOML Schema cannot be loaded: {e}"),
+                            None,
+                            None,
                         )],
                         None,
                     )
                     .await;
 
-                // Do not continue, as we do not know the schema to validate against
                 return;
             }
         };
