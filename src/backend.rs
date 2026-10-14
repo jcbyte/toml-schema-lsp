@@ -1,8 +1,10 @@
-use std::sync::RwLock;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, RwLock};
 
 use serde_json::Value;
 use tower_lsp::Client;
 
+mod consent;
 mod lsp;
 mod remote;
 mod util;
@@ -58,6 +60,8 @@ pub struct Backend {
     client: Client,
     remote_settings: RwLock<RemoteSettings>,
     remote_schemas: remote::RemoteSchemas,
+    // The answers to the prompts for hosts which are not in the settings, until the server restarts
+    host_decisions: Mutex<HashMap<String, Arc<tokio::sync::Mutex<Option<bool>>>>>,
 }
 
 impl Backend {
@@ -66,6 +70,7 @@ impl Backend {
             client,
             remote_settings: RwLock::new(RemoteSettings::default().set_enabled(true)),
             remote_schemas: remote::RemoteSchemas::default(),
+            host_decisions: Mutex::new(HashMap::new()),
         }
     }
 

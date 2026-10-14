@@ -22,7 +22,7 @@ Using [TOML Schema](https://github.com/brunoborges/toml-schema) by [@brunoborges
 
 ## Remote Schemas
 
-`toml-schema.location` can be an `https://` URL. As a TOML file (and the server behind the URL) is untrusted, nothing is downloaded until the host is allowed in your **user** settings (workspace settings cannot allow hosts):
+`toml-schema.location` can be an `https://` URL. As a TOML file (and the server behind the URL) is untrusted, nothing is downloaded until you allow the host. The first time a host is used, you are asked, and **Allow** adds it to your user settings (VS Code only, other clients keep the answer until the server restarts). Hosts can also be allowed directly in your **user** settings (workspace settings cannot allow hosts):
 
 ```json
 "tomlSchema.remote.allowedHosts": ["example.com"]
