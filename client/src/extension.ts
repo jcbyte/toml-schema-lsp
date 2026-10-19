@@ -1,6 +1,6 @@
 import net from "net";
 import path from "path";
-import { ExtensionContext, ExtensionMode, workspace } from "vscode";
+import { ConfigurationTarget, ExtensionContext, ExtensionMode, workspace } from "vscode";
 import { LanguageClient, LanguageClientOptions, ServerOptions } from "vscode-languageclient/node";
 
 let client: LanguageClient;
@@ -44,6 +44,17 @@ export function activate(context: ExtensionContext) {
 	};
 
 	client = new LanguageClient("tomlSchemaLsp", "TOML Schema Language Server", serverOptions, clientOptions);
+
+	// The server asks the user before fetching schemas from new hosts, and reports allowed ones
+	client.onNotification("tomlSchema/allowHost", async ({ host }: { host: string }) => {
+		const config = workspace.getConfiguration("tomlSchema.remote");
+		const hosts = config.get<string[]>("allowedHosts", []);
+
+		if (!hosts.includes(host)) {
+			await config.update("allowedHosts", [...hosts, host], ConfigurationTarget.Global);
+		}
+	});
+
 	// Starting the client will also start the Rust binary (in prod)
 	client.start();
 }

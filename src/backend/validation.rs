@@ -87,7 +87,7 @@ impl Backend {
             remote::validate_url(&url, false)?;
 
             let host = url.host_str().unwrap_or_default();
-            if !self.remote_settings.read().unwrap().is_host_allowed(host) {
+            if !self.is_host_allowed(host).await {
                 return Err(format!(
                     "Remote schema host '{host}' is not allowed, add it to the tomlSchema.remote.allowedHosts setting"
                 ));
