@@ -6,7 +6,11 @@ use super::Backend;
 
 #[tower_lsp::async_trait]
 impl LanguageServer for Backend {
-    async fn initialize(&self, _: InitializeParams) -> Result<InitializeResult> {
+    async fn initialize(&self, params: InitializeParams) -> Result<InitializeResult> {
+        if let Some(options) = &params.initialization_options {
+            self.update_settings(options);
+        }
+
         Ok(InitializeResult {
             capabilities: ServerCapabilities {
                 // Tell LSP we want to manage full text documents
@@ -37,6 +41,10 @@ impl LanguageServer for Backend {
         let uri = params.text_document.uri;
         let text = &params.content_changes[0].text;
         self.validate_doc(uri, text).await;
+    }
+
+    async fn did_change_configuration(&self, params: DidChangeConfigurationParams) {
+        self.update_settings(&params.settings);
     }
 
     async fn did_open(&self, params: DidOpenTextDocumentParams) {

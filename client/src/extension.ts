@@ -35,7 +35,10 @@ export function activate(context: ExtensionContext) {
 	const clientOptions: LanguageClientOptions = {
 		// Register the server for TOML files
 		documentSelector: [{ scheme: "file", language: "toml" }],
+		// The server reads the remote schema settings from these
+		initializationOptions: workspace.getConfiguration("tomlSchema"),
 		synchronize: {
+			configurationSection: "tomlSchema",
 			fileEvents: workspace.createFileSystemWatcher("**/*.toml"),
 		},
 	};

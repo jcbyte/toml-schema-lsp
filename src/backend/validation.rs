@@ -1,9 +1,12 @@
+use std::sync::Arc;
+
 use line_index::LineIndex;
 use toml::{Table, Value};
 use toml_schema::Schema;
 use tower_lsp::lsp_types::{Diagnostic, DiagnosticSeverity, Url};
 
 use super::Backend;
+use super::remote;
 use super::util;
 
 impl Backend {
@@ -29,70 +32,12 @@ impl Backend {
             return;
         };
 
-        // Load the specified toml schema
-        let Some(schema_path) = uri
-            .to_file_path()
-            .ok()
-            .and_then(|fp| fp.parent()?.to_owned().into())
-            .map(|dp| dp.join(schema_loc))
-        else {
-            // If the schema path cannot be resolved, potentially user is in scratchpad
-            // Show a warning and do not continue
-
-            let doc_edit = toml_edit::ImDocument::parse(text)
-                .expect("TOML was correctly deserialised earlier");
-            let schema_span = util::get_closest_item_span(&doc_edit, "toml-schema.location");
-            let doc_index = LineIndex::new(text);
-            let range = util::get_file_range(&doc_index, schema_span);
-
-            self.client
-                .publish_diagnostics(
-                    uri,
-                    vec![Diagnostic::new(
-                        range,
-                        Some(DiagnosticSeverity::WARNING),
-                        None,
-                        None,
-                        "TOML Schema location cannot be resolved".to_string(),
-                        None,
-                        None,
-                    )],
-                    None,
-                )
-                .await;
-
-            return;
-        };
-
-        // todo the schema should be stored in a cache instead, what if it changes?
-        let schema = match Schema::load(&schema_path) {
-            Ok(s) => s,
-            Err(e) => {
+        let schema = match self.load_schema(&uri, schema_loc).await {
+            Ok(schema) => schema,
+            Err(message) => {
                 // If the specified toml schema cannot be loaded
                 // Show a warning, and do not continue, as we do not know the schema to validate against
-
-                let doc_edit = toml_edit::ImDocument::parse(text)
-                    .expect("TOML was correctly deserialised earlier");
-                let schema_span = util::get_closest_item_span(&doc_edit, "toml-schema.location");
-                let doc_index = LineIndex::new(text);
-                let range = util::get_file_range(&doc_index, schema_span);
-
-                self.client
-                    .publish_diagnostics(
-                        uri,
-                        vec![Diagnostic::new(
-                            range,
-                            Some(DiagnosticSeverity::WARNING),
-                            None,
-                            None,
-                            format!("TOML Schema cannot be loaded: {e}"),
-                            None,
-                            None,
-                        )],
-                        None,
-                    )
-                    .await;
-
+                self.warn_on_location(uri, text, message).await;
                 return;
             }
         };
@@ -131,6 +76,64 @@ impl Backend {
         // Push the diagnostics back to the client
         self.client
             .publish_diagnostics(uri, diagnostics, None)
+            .await;
+    }
+
+    async fn load_schema(&self, doc_uri: &Url, location: &str) -> Result<Arc<Schema>, String> {
+        // Windows paths like `C:\schema.tosd` parse as URLs with a one letter scheme
+        if let Ok(url) = Url::parse(location)
+            && url.scheme().len() > 1
+        {
+            remote::validate_url(&url, false)?;
+
+            let host = url.host_str().unwrap_or_default();
+            if !self.remote_settings.read().unwrap().is_host_allowed(host) {
+                return Err(format!(
+                    "Remote schema host '{host}' is not allowed, add it to the tomlSchema.remote.allowedHosts setting"
+                ));
+            }
+            return self
+                .remote_schemas
+                .get(&url)
+                .await
+                .map_err(|e| format!("TOML Schema cannot be loaded: {e}"));
+        }
+
+        let schema_path = doc_uri
+            .to_file_path()
+            .ok()
+            .and_then(|fp| Some(fp.parent()?.join(location)))
+            // If the schema path cannot be resolved, potentially user is in scratchpad
+            .ok_or_else(|| "TOML Schema location cannot be resolved".to_string())?;
+
+        // todo local schemas should be cached too, what if it changes?
+        Schema::load(&schema_path)
+            .map(Arc::new)
+            .map_err(|e| format!("TOML Schema cannot be loaded: {e}"))
+    }
+
+    /// Show a warning on the `toml-schema.location` value, replacing previous diagnostics
+    async fn warn_on_location(&self, uri: Url, text: &str, message: String) {
+        let doc_edit =
+            toml_edit::ImDocument::parse(text).expect("TOML was correctly deserialised earlier");
+        let schema_span = util::get_closest_item_span(&doc_edit, "toml-schema.location");
+        let doc_index = LineIndex::new(text);
+        let range = util::get_file_range(&doc_index, schema_span);
+
+        self.client
+            .publish_diagnostics(
+                uri,
+                vec![Diagnostic::new(
+                    range,
+                    Some(DiagnosticSeverity::WARNING),
+                    None,
+                    None,
+                    message,
+                    None,
+                    None,
+                )],
+                None,
+            )
             .await;
     }
 }

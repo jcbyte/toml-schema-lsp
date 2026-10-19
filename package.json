@@ -19,6 +19,28 @@
 		"onLanguage:toml"
 	],
 	"main": "./client/out/extension.js",
+	"contributes": {
+		"configuration": {
+			"title": "TOML Schema",
+			"properties": {
+				"tomlSchema.remote.enabled": {
+					"type": "boolean",
+					"default": true,
+					"scope": "machine",
+					"description": "Allow fetching remote (https) TOML schemas."
+				},
+				"tomlSchema.remote.allowedHosts": {
+					"type": "array",
+					"items": {
+						"type": "string"
+					},
+					"default": [],
+					"scope": "machine",
+					"markdownDescription": "Hosts remote TOML schemas may be fetched from, e.g. `example.com`. Schemas from any other host are not downloaded."
+				}
+			}
+		}
+	},
 	"scripts": {
 		"dev": "esbuild client/src/extension.ts --bundle --outfile=client/out/extension.js --external:vscode --format=cjs --platform=node --watch --sourcemap",
 		"build": "esbuild client/src/extension.ts --bundle --outfile=client/out/extension.js --external:vscode --format=cjs --platform=node --minify",
